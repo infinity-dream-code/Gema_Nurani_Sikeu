@@ -14,13 +14,8 @@ Route::get('/home', function () {
 })->name('home');
 Route::get("/reload-captcha", [AuthController::class, "reloadCaptcha"])->name("reload-captcha");
 Route::get("/reload-math-captcha", [\App\Http\Controllers\Auth\LoginController::class, "reloadMathCaptcha"])->name("reload-math-captcha");
-Route::match(["get", "post"], "/keep-alive", function (\Illuminate\Http\Request $request) {
-    return response()->json([
-        "status" => "ok",
-        "authenticated" => \Illuminate\Support\Facades\Auth::check(),
-        "csrf_token" => csrf_token(),
-    ]);
-})->name("keep-alive");
+Route::match(["get", "post"], "/keep-alive", \App\Http\Controllers\Admin\KeepAliveController::class)
+    ->name("keep-alive");
 
 Route::prefix("admin")
     ->name("admin.")

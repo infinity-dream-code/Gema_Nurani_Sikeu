@@ -363,6 +363,11 @@
         $('input[name="_token"]').val(token);
     }
 
+    function csrfFromKeepAlive(data) {
+        if (!data) return null;
+        return data.csrf_token || data.token || null;
+    }
+
     let keepAliveInFlight = false;
     let keepAliveCallbacks = [];
 
@@ -382,8 +387,9 @@
             cache: false,
             dataType: 'json',
             success: function (data) {
-                if (data && data.csrf_token) {
-                    applyCsrfToken(data.csrf_token);
+                const token = csrfFromKeepAlive(data);
+                if (token) {
+                    applyCsrfToken(token);
                 }
                 const queued = keepAliveCallbacks.splice(0);
                 queued.forEach(function (cb) { cb(data); });
@@ -424,27 +430,32 @@
         window.addEventListener(evt, onUserActivity, { passive: true });
     });
 
+    function shouldSilentRetry(status) {
+        return status === 419 || status === 401;
+    }
+
     const originalFetch = window.fetch.bind(window);
     window.fetch = function (input, init) {
         init = init || {};
         return originalFetch(input, init).then(function (response) {
-            if (response.status !== 419 || init._retried) {
+            if (!shouldSilentRetry(response.status) || init._retried) {
                 return response;
             }
 
             return new Promise(function (resolve) {
                 window.pingKeepAlive(function (data) {
-                    if (!data || !data.csrf_token) {
+                    const token = csrfFromKeepAlive(data);
+                    if (!token) {
                         resolve(response);
                         return;
                     }
 
                     const retryInit = Object.assign({}, init, { _retried: true });
                     if (retryInit.headers instanceof Headers) {
-                        retryInit.headers.set('X-CSRF-TOKEN', data.csrf_token);
+                        retryInit.headers.set('X-CSRF-TOKEN', token);
                     } else {
                         retryInit.headers = Object.assign({}, retryInit.headers || {}, {
-                            'X-CSRF-TOKEN': data.csrf_token
+                            'X-CSRF-TOKEN': token
                         });
                     }
                     resolve(originalFetch(input, retryInit));
@@ -460,17 +471,18 @@
             }
         });
 
-        // Jangan tampilkan alert "sesi habis" untuk 419; recover diam-diam.
+        // Jangan tampilkan alert "sesi habis"; recover diam-diam.
         $.ajaxPrefilter(function (options) {
-            if (options.statusCode && options.statusCode[419]) {
+            if (options.statusCode) {
                 options.statusCode = Object.assign({}, options.statusCode);
                 delete options.statusCode[419];
+                delete options.statusCode[401];
             }
 
             var originalError = options.error;
             if (typeof originalError === 'function') {
                 options.error = function (jqXHR, textStatus, errorThrown) {
-                    if (jqXHR && jqXHR.status === 419 && !options._retried) {
+                    if (jqXHR && shouldSilentRetry(jqXHR.status) && !options._retried) {
                         return;
                     }
                     return originalError.apply(this, arguments);
@@ -479,15 +491,16 @@
         });
 
         $(document).ajaxError(function (event, jqXHR, ajaxSettings) {
-            if (jqXHR.status === 419 && !ajaxSettings._retried) {
+            if (shouldSilentRetry(jqXHR.status) && !ajaxSettings._retried) {
                 ajaxSettings._retried = true;
                 window.pingKeepAlive(function (data) {
-                    if (data && data.csrf_token) {
+                    const token = csrfFromKeepAlive(data);
+                    if (token) {
                         if (ajaxSettings.headers) {
-                            ajaxSettings.headers['X-CSRF-TOKEN'] = data.csrf_token;
+                            ajaxSettings.headers['X-CSRF-TOKEN'] = token;
                         }
                         if (typeof ajaxSettings.data === 'string' && ajaxSettings.data.indexOf('_token=') !== -1) {
-                            ajaxSettings.data = ajaxSettings.data.replace(/_token=[^&]*/, '_token=' + encodeURIComponent(data.csrf_token));
+                            ajaxSettings.data = ajaxSettings.data.replace(/_token=[^&]*/, '_token=' + encodeURIComponent(token));
                         }
                         $.ajax(ajaxSettings);
                     }

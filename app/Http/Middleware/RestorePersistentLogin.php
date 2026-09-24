@@ -5,34 +5,29 @@ namespace App\Http\Middleware;
 use App\Support\PersistentLogin;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class RestorePersistentLogin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (Auth::check()) {
-            $current = Auth::user();
-            if ($current instanceof \App\Models\CyberKey && !$request->cookie(PersistentLogin::COOKIE)) {
-                PersistentLogin::queue($current);
+        if (!$request->routeIs('logout')) {
+            try {
+                PersistentLogin::restoreFromRequest($request);
+            } catch (Throwable $e) {
+                //
             }
-
-            return $next($request);
         }
 
-        $user = PersistentLogin::userFromCookie($request->cookie(PersistentLogin::COOKIE));
-        if ($user) {
-            Auth::login($user);
-            PersistentLogin::queue($user);
+        /** @var Response $response */
+        $response = $next($request);
 
-            return $next($request);
-        }
+        $response->headers->set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        $response->headers->set('CDN-Cache-Control', 'no-store');
 
-        if ($request->cookie(PersistentLogin::COOKIE)) {
-            PersistentLogin::forget();
-        }
-
-        return $next($request);
+        return $response;
     }
 }
