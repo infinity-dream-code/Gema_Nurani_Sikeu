@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 class InputSiswaProcedure
 {
     /**
-     * Excel → InputSiswa:
+     * Excel → InputSiswaV2:
      * NIS → p_NIMRAW, Nama → p_NMCUSTRAW, Kelas → p_DESC02,
      * Unit → p_CODE02 & p_CODE01, Kelompok → p_DESC03, Angkatan → p_DESC04,
      * Alamat → p_DESC05, Gender → p_CODE04, Ortu → p_GENUS.
@@ -27,7 +27,7 @@ class InputSiswaProcedure
         ?string $code05 = null,
     ): void {
         $pdo = DB::connection('DATA_MYSQL')->getPdo();
-        $stmt = $pdo->prepare('CALL InputSiswa(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt = $pdo->prepare('CALL InputSiswaV2(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $stmt->execute([
             self::limit($nimRaw, 15),
             self::limit($namaRaw, 70),
@@ -47,6 +47,7 @@ class InputSiswaProcedure
         } while ($stmt->nextRowset());
 
         Log::info('input-siswa.procedure.ok', [
+            'procedure' => 'InputSiswaV2',
             'nis' => $nimRaw,
             'unit' => $code02,
             'kelas' => $desc02,
