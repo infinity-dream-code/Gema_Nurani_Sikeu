@@ -350,10 +350,148 @@
     updateClock();
     setInterval(updateClock, 1000);
 
+    function applyCsrfToken(token) {
+        if (!token) {
+            return;
+        }
+        $('meta[name="csrf-token"]').attr('content', token);
+        $.ajaxSetup({
+            headers: {
+                'X-CSRF-TOKEN': token
+            }
+        });
+        $('input[name="_token"]').val(token);
+    }
+
+    let keepAliveInFlight = false;
+    let keepAliveCallbacks = [];
+
+    window.pingKeepAlive = function (callback) {
+        if (typeof $ === 'undefined') return;
+        if (typeof callback === 'function') {
+            keepAliveCallbacks.push(callback);
+        }
+        if (keepAliveInFlight) {
+            return;
+        }
+
+        keepAliveInFlight = true;
+        $.ajax({
+            url: '{{ route('keep-alive') }}',
+            type: 'GET',
+            cache: false,
+            dataType: 'json',
+            success: function (data) {
+                if (data && data.csrf_token) {
+                    applyCsrfToken(data.csrf_token);
+                }
+                const queued = keepAliveCallbacks.splice(0);
+                queued.forEach(function (cb) { cb(data); });
+            },
+            error: function () {
+                const queued = keepAliveCallbacks.splice(0);
+                queued.forEach(function (cb) { cb(null); });
+            },
+            complete: function () {
+                keepAliveInFlight = false;
+            }
+        });
+    };
+
+    setInterval(window.pingKeepAlive, 3 * 60 * 1000);
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+            window.pingKeepAlive();
+        }
+    });
+    window.addEventListener('focus', function () {
+        window.pingKeepAlive();
+    });
+    window.addEventListener('pageshow', function () {
+        window.pingKeepAlive();
+    });
+
+    let lastActivityPing = Date.now();
+    function onUserActivity() {
+        const now = Date.now();
+        if (now - lastActivityPing > 2 * 60 * 1000) {
+            lastActivityPing = now;
+            window.pingKeepAlive();
+        }
+    }
+    ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(function (evt) {
+        window.addEventListener(evt, onUserActivity, { passive: true });
+    });
+
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+        init = init || {};
+        return originalFetch(input, init).then(function (response) {
+            if (response.status !== 419 || init._retried) {
+                return response;
+            }
+
+            return new Promise(function (resolve) {
+                window.pingKeepAlive(function (data) {
+                    if (!data || !data.csrf_token) {
+                        resolve(response);
+                        return;
+                    }
+
+                    const retryInit = Object.assign({}, init, { _retried: true });
+                    if (retryInit.headers instanceof Headers) {
+                        retryInit.headers.set('X-CSRF-TOKEN', data.csrf_token);
+                    } else {
+                        retryInit.headers = Object.assign({}, retryInit.headers || {}, {
+                            'X-CSRF-TOKEN': data.csrf_token
+                        });
+                    }
+                    resolve(originalFetch(input, retryInit));
+                });
+            });
+        });
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
         $.ajaxSetup({
             headers: {
                 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            }
+        });
+
+        // Jangan tampilkan alert "sesi habis" untuk 419; recover diam-diam.
+        $.ajaxPrefilter(function (options) {
+            if (options.statusCode && options.statusCode[419]) {
+                options.statusCode = Object.assign({}, options.statusCode);
+                delete options.statusCode[419];
+            }
+
+            var originalError = options.error;
+            if (typeof originalError === 'function') {
+                options.error = function (jqXHR, textStatus, errorThrown) {
+                    if (jqXHR && jqXHR.status === 419 && !options._retried) {
+                        return;
+                    }
+                    return originalError.apply(this, arguments);
+                };
+            }
+        });
+
+        $(document).ajaxError(function (event, jqXHR, ajaxSettings) {
+            if (jqXHR.status === 419 && !ajaxSettings._retried) {
+                ajaxSettings._retried = true;
+                window.pingKeepAlive(function (data) {
+                    if (data && data.csrf_token) {
+                        if (ajaxSettings.headers) {
+                            ajaxSettings.headers['X-CSRF-TOKEN'] = data.csrf_token;
+                        }
+                        if (typeof ajaxSettings.data === 'string' && ajaxSettings.data.indexOf('_token=') !== -1) {
+                            ajaxSettings.data = ajaxSettings.data.replace(/_token=[^&]*/, '_token=' + encodeURIComponent(data.csrf_token));
+                        }
+                        $.ajax(ajaxSettings);
+                    }
+                });
             }
         });
 

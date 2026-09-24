@@ -94,6 +94,7 @@ class LoginController extends Controller
         }
 
         $this->guard()->login($user);
+        \App\Support\PersistentLogin::queue($user);
         session()->forget(["auth_cf_fallback", "auth_math_answer"]);
 
         return true;
@@ -321,6 +322,7 @@ SVG;
     public function logout(Request $request): RedirectResponse
     {
         Auth::logout();
+        \App\Support\PersistentLogin::forget();
 
         $request->session()->invalidate();
 

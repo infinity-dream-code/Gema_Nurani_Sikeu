@@ -106,6 +106,58 @@
     // updateClock();
     // setInterval(updateClock, 1000);
 </script>
+<script>
+    let keepAliveInFlight = false;
+
+    window.pingKeepAlive = function (callback) {
+        if (typeof $ === 'undefined') return;
+        if (keepAliveInFlight) {
+            if (typeof callback === 'function') {
+                callback(null);
+            }
+            return;
+        }
+
+        keepAliveInFlight = true;
+        $.ajax({
+            url: '{{ route('keep-alive') }}',
+            type: 'GET',
+            cache: false,
+            dataType: 'json',
+            success: function (data) {
+                if (data && data.csrf_token) {
+                    $('meta[name="csrf-token"]').attr('content', data.csrf_token);
+                    $('input[name="_token"]').val(data.csrf_token);
+                }
+                if (typeof callback === 'function') {
+                    callback(data);
+                }
+            },
+            error: function () {
+                if (typeof callback === 'function') {
+                    callback(null);
+                }
+            },
+            complete: function () {
+                keepAliveInFlight = false;
+            }
+        });
+    };
+
+    setInterval(window.pingKeepAlive, 3 * 60 * 1000);
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+            window.pingKeepAlive();
+        }
+    });
+    window.addEventListener('focus', function () {
+        window.pingKeepAlive();
+    });
+    window.addEventListener('pageshow', function () {
+        window.pingKeepAlive();
+    });
+</script>
 
 </body>
 </html>

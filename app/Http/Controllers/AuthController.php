@@ -50,6 +50,7 @@ class AuthController extends Controller
     public function logout()
     {
         Session::forget('user');
+        \App\Support\PersistentLogin::forget();
         return redirect()->route('login');
     }
 
