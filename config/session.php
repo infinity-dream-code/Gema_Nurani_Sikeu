@@ -124,7 +124,7 @@ return [
     |
     */
 
-    'cookie' => env('SESSION_COOKIE', 'sikeu_jis_session'),
+    'cookie' => env('SESSION_COOKIE', 'demo_installment_session'),
 
     /*
     |--------------------------------------------------------------------------
