@@ -139,37 +139,49 @@ class ExportImportDataController extends Controller
     {
         $request->validate(
             [
-                'fileImport' => ['required', 'mimes:xls,xlsx', 'max:1024']
+                'fileImport' => [
+                    'required',
+                    'file',
+                    'mimes:xls,xlsx',
+                    'mimetypes:application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/octet-stream,application/wps-office.xlsx,application/wps-office.xls',
+                    'max:1024',
+                ],
             ],
             ValidationMessage::messages(),
             ValidationMessage::attributes()
         );
 
-        $file = $request->fileImport;
+        $file = $request->file('fileImport');
 
         try {
-            $headingsData = (new HeadingRowImport)->toArray($file);
             $requiredColumns = [
                 'nama', 'unit', 'kelas', 'kelompok', 'angkatan',
             ];
-
             $conditionalColumns = ['nis', 'nodaftar'];
-            if (empty($headingsData) || !isset($headingsData[0][0])) throw new \Exception ('Tidak dapat membaca judul kolom dari file. Pastikan file memiliki header yang sesuai.');
-            $headings = $headingsData[0][0];
-            $headings = array_map('strtolower', $headings);
+
+            [$headingRow, $headings] = $this->resolveImportHeadings($file, $requiredColumns);
+
+            if ($headings === []) {
+                throw new Exception('Tidak dapat membaca judul kolom dari file. Pastikan file memiliki header yang sesuai di baris 1.');
+            }
+
             $missingColumns = [];
-            $hasNis = in_array('nis', $headings);
-            $hasNodaftar = in_array('nodaftar', $headings);
+            $hasNis = in_array('nis', $headings, true);
+            $hasNodaftar = in_array('nodaftar', $headings, true);
 
             if (!$hasNis && !$hasNodaftar) {
                 $missingColumns[] = 'NIS / NODAFTAR';
             }
-            foreach ($requiredColumns as $column) if (!in_array($column, $headings)) $missingColumns[] = $column;
+            foreach ($requiredColumns as $column) {
+                if (!in_array($column, $headings, true)) {
+                    $missingColumns[] = $column;
+                }
+            }
 
             if (!empty($missingColumns)) {
                 $formattedMissingColumns = strtoupper(str_replace('_', ' ', implode(', ', $missingColumns)));
                 $formattedRequiredColumns = strtoupper(str_replace('_', ' ', implode(', ', array_merge($requiredColumns, $conditionalColumns))));
-                throw new Exception (
+                throw new Exception(
                     "Kolom $formattedMissingColumns tidak ditemukan.<br><hr>
                                pastikan kolom berikut ada dan terisi pada file import yang akan diproses: $formattedRequiredColumns. <br>
                                Catatan: NIS atau NODAFTAR wajib salah satu terisi."
@@ -177,7 +189,7 @@ class ExportImportDataController extends Controller
             }
 
             Cache::forget($this->cacheKey);
-            Excel::import(new ImportDataSiswa(), $file);
+            Excel::import(new ImportDataSiswa($headingRow), $file);
 
             $data = Cache::get($this->cacheKey) ?? [];
             $invalidCount = collect($data)->where('status', 0)->count();
@@ -191,7 +203,12 @@ class ExportImportDataController extends Controller
             $errorMessages = $e->errors();
             $errorMessage = $errorMessages['error'][0] ?? 'Terjadi kesalahan saat melakukan import data.';
             return response()->json(['message' => $errorMessage, 'error' => $errorMessages], 422);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
+            Log::error('export_import_data.store.failed', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             $error = $e->getMessage();
             return response()->json(['message' => "Gagal!<br> tidak dapat melakukan $this->mainTitle.<hr> $error", 'error' => $error], 422);
         }
@@ -378,6 +395,65 @@ class ExportImportDataController extends Controller
     {
         Cache::forget($this->cacheKey);
         return response()->json(['message' => 'Data dibersihkan'], 200);
+    }
+
+    /**
+     * @return array{0: int, 1: array<int, string>}
+     */
+    private function resolveImportHeadings($file, array $requiredColumns): array
+    {
+        foreach ([1, 2] as $headingRow) {
+            $raw = (new HeadingRowImport($headingRow))->toArray($file);
+            $headings = $this->normalizeHeadings($raw[0][0] ?? null);
+            if ($this->headingsLookValid($headings, $requiredColumns)) {
+                return [$headingRow, $headings];
+            }
+        }
+
+        $raw = (new HeadingRowImport(1))->toArray($file);
+
+        return [1, $this->normalizeHeadings($raw[0][0] ?? null)];
+    }
+
+    /**
+     * @param  mixed  $headings
+     * @return array<int, string>
+     */
+    private function normalizeHeadings($headings): array
+    {
+        if (!is_array($headings) || $headings === []) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($headings as $heading) {
+            $value = strtolower(trim((string) $heading));
+            if ($value !== '') {
+                $normalized[] = $value;
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function headingsLookValid(array $headings, array $requiredColumns): bool
+    {
+        if ($headings === []) {
+            return false;
+        }
+
+        $hasIdentity = in_array('nis', $headings, true) || in_array('nodaftar', $headings, true);
+        if (!$hasIdentity) {
+            return false;
+        }
+
+        foreach ($requiredColumns as $column) {
+            if (!in_array($column, $headings, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function normalizeImportItem(array $item): array

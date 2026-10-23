@@ -12,6 +12,10 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRow, SkipsEmptyRows
 {
+    public function __construct(private int $headingRow = 1)
+    {
+    }
+
     public function sheets(): array
     {
         return [
@@ -121,6 +125,6 @@ class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRo
 
     public function headingRow(): int
     {
-        return 1;
+        return $this->headingRow > 0 ? $this->headingRow : 1;
     }
 }

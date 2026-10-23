@@ -270,6 +270,41 @@
             window.history.pushState(null, '', newUrl);
         }
 
+        async function parseJsonResponse(response) {
+            const contentType = response.headers.get('content-type') || '';
+            const raw = await response.text();
+
+            if (contentType.includes('application/json')) {
+                try {
+                    return JSON.parse(raw);
+                } catch (error) {
+                    throw {status: response.status, message: 'Respons server tidak valid (JSON rusak).'};
+                }
+            }
+
+            throw {
+                status: response.status,
+                message: raw?.trim()
+                    ? 'Server mengembalikan error. Silakan coba lagi atau periksa format file Excel.'
+                    : 'Server tidak mengembalikan data.',
+            };
+        }
+
+        function appendImportFileToFormData(formData) {
+            const pond = filePondElements['file'];
+            if (!pond) {
+                return formData;
+            }
+
+            const pondFile = pond.getFiles()[0]?.file;
+            if (pondFile) {
+                formData.delete('fileImport');
+                formData.append('fileImport', pondFile, pondFile.name);
+            }
+
+            return formData;
+        }
+
         function clearErrorMessages(formId) {
             const form = document.querySelector(`#${formId}`);
             const errorElements = form.querySelectorAll('.invalid-feedback');
@@ -279,7 +314,7 @@
             errorClass.forEach(element => element.classList.remove('is-invalid'));
         }
 
-        function processErros(errors) {
+        function processErrors(errors) {
             for (const [key, value] of Object.entries(errors)) {
                 const field = $(`[name=${key}]`);
                 const errorMessage = value[0];
@@ -375,6 +410,7 @@
                         loadingAlert('Meng-unggah data siswa');
                         url = '{{route('admin.master-data.export-import-data.store')}}';
                         method = 'POST';
+                        formData = appendImportFileToFormData(formData);
                     }else if (formId === "formValidate"){
                         loadingAlert('Menyimpan data siswa');
                         url = '{{route('admin.master-data.export-import-data.validate-data')}}';
@@ -387,7 +423,9 @@
                     let fetchOptions = {
                         method: method,
                         headers: {
-                            'X-CSRF-TOKEN': csrfToken
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
                         },
                         body: formData
                     };
@@ -395,13 +433,12 @@
 
                     clearErrorMessages(formId);
                     fetch(url, fetchOptions)
-                        .then(response => {
+                        .then(async response => {
+                            const payload = await parseJsonResponse(response);
                             if (!response.ok) {
-                                return response.json().then(err => {
-                                    throw {status: response.status, error: err};
-                                });
+                                throw {status: response.status, payload};
                             }
-                            return response.json();
+                            return payload;
                         })
                         .then(data => {
                             if (typeof Swal !== 'undefined') {
@@ -419,11 +456,13 @@
                             if (typeof Swal !== 'undefined') {
                                 Swal.close();
                             }
+                            const payload = error.payload || error.error || {};
+                            const errors = payload.error || payload.errors;
+                            const message = payload.message || error.message;
                             if (error.status === 422) {
-                                const errors = error.error.error || error.error.errors;
-                                errorAlert(error.error.message);
+                                errorAlert(message || 'Data tidak valid.');
                                 if (errors) {
-                                    processErrors(errors)
+                                    processErrors(errors);
                                 }
                             } else {
                                 const errorMessages = {
@@ -434,7 +473,7 @@
                                     419: 'Sesi anda sudah habis 🙏 <br>Silahkan muat ulang halaman untuk melanjutkan! <br> jika masalah masih terjadi silahkan login kembali!',
                                     429: 'Terlalu banyak permintaan akses <br>silahkan tunggu beberapa saat 🙏',
                                 };
-                                errorAlert(errorMessages[error.status] || "Terjadi kesalahan, silahkan coba memuat ulang halaman");
+                                errorAlert(message || errorMessages[error.status] || "Terjadi kesalahan, silahkan coba memuat ulang halaman");
                             }
                         });
                 });
@@ -469,29 +508,31 @@
                         method: "GET",
                         headers: {
                             'X-CSRF-TOKEN': csrfToken,
-                            'Accept': 'application/pdf'
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
                         }
                     });
 
                 fetch(request)
-                    .then(response => {
+                    .then(async response => {
+                        const payload = await parseJsonResponse(response);
                         if (!response.ok) {
-                            return response.json().then(err => {
-                                throw {status: response.status, error: err};
-                            });
+                            throw {status: response.status, payload};
                         }
-                        return response.json();
+                        return payload;
                     })
                     .then(data => {
                         successAlert(data.message);
                         dataReload("main_table");
                     })
                     .catch(error => {
+                        const payload = error.payload || error.error || {};
+                        const errors = payload.error || payload.errors;
+                        const message = payload.message || error.message;
                         if (error.status === 422) {
-                            const errors = error.error || error.errors;
-                            errorAlert(error.message);
+                            errorAlert(message || 'Data tidak valid.');
                             if (errors) {
-                                processErrors(errors)
+                                processErrors(errors);
                             }
                         } else {
                             const errorMessages = {
@@ -502,7 +543,7 @@
                                 419: 'Sesi anda sudah habis 🙏 <br>Silahkan muat ulang halaman untuk melanjutkan! <br> jika masalah masih terjadi silahkan login kembali!',
                                 429: 'Terlalu banyak permintaan akses <br>silahkan tunggu beberapa saat 🙏',
                             };
-                            errorAlert(errorMessages[error.status] || "Terjadi kesalahan, silahkan coba memuat ulang halaman");
+                            errorAlert(message || errorMessages[error.status] || "Terjadi kesalahan, silahkan coba memuat ulang halaman");
                         }
                     });
 
