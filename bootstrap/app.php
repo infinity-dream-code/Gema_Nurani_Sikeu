@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../app/Support/ZipArchivePolyfill.php';
+
 /*
 |--------------------------------------------------------------------------
 | Create The Application
