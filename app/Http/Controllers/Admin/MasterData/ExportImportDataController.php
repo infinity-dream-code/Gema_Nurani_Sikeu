@@ -142,12 +142,14 @@ class ExportImportDataController extends Controller
                 'fileImport' => [
                     'required',
                     'file',
-                    'mimes:xls,xlsx',
+                    'extensions:xls,xlsx',
                     'mimetypes:application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/octet-stream,application/wps-office.xlsx,application/wps-office.xls',
                     'max:1024',
                 ],
             ],
-            ValidationMessage::messages(),
+            array_merge(ValidationMessage::messages(), [
+                'extensions' => ':attribute harus bertipe: :values',
+            ]),
             ValidationMessage::attributes()
         );
 
