@@ -300,7 +300,7 @@
 <!-- Main JS -->
 <script src="{{asset('js/main.js')}}"></script>
 
-<script src="{{asset('js/alerts.min.js')}}"></script>
+<script src="{{asset('js/alerts.js')}}"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"/>
 
 <style>
@@ -434,6 +434,14 @@
         return status === 419 || status === 401;
     }
 
+    function hangUntilSamePageReload() {
+        if (!window.__sessionReloadArmed) {
+            window.__sessionReloadArmed = true;
+            window.location.reload();
+        }
+        return new Promise(function () {});
+    }
+
     const originalFetch = window.fetch.bind(window);
     window.fetch = function (input, init) {
         init = init || {};
@@ -442,22 +450,14 @@
                 return response;
             }
             if (init._retried) {
-                if (!window.__sessionReloadArmed) {
-                    window.__sessionReloadArmed = true;
-                    window.location.reload();
-                }
-                return response;
+                return hangUntilSamePageReload();
             }
 
             return new Promise(function (resolve) {
                 window.pingKeepAlive(function (data) {
                     const token = csrfFromKeepAlive(data);
                     if (!token) {
-                        if (!window.__sessionReloadArmed) {
-                            window.__sessionReloadArmed = true;
-                            window.location.reload();
-                        }
-                        resolve(response);
+                        resolve(hangUntilSamePageReload());
                         return;
                     }
 
@@ -469,7 +469,15 @@
                             'X-CSRF-TOKEN': token
                         });
                     }
-                    resolve(originalFetch(input, retryInit));
+                    originalFetch(input, retryInit).then(function (retryResponse) {
+                        if (shouldSilentRetry(retryResponse.status)) {
+                            resolve(hangUntilSamePageReload());
+                            return;
+                        }
+                        resolve(retryResponse);
+                    }).catch(function () {
+                        resolve(hangUntilSamePageReload());
+                    });
                 });
             });
         });

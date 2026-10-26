@@ -408,12 +408,12 @@
 
                     if (formId === "formImport") {
                         loadingAlert('Meng-unggah data siswa');
-                        url = '{{route('admin.master-data.export-import-data.store')}}';
+                        url = '{{ route('admin.master-data.export-import-data.store', [], false) }}';
                         method = 'POST';
                         formData = appendImportFileToFormData(formData);
                     }else if (formId === "formValidate"){
                         loadingAlert('Menyimpan data siswa');
-                        url = '{{route('admin.master-data.export-import-data.validate-data')}}';
+                        url = '{{ route('admin.master-data.export-import-data.validate-data', [], false) }}';
                         method = 'POST';
                     }
 
@@ -453,6 +453,9 @@
                             document.querySelector(`#${formId} [data-bs-dismiss="modal"]`)?.click();
                         })
                         .catch(error => {
+                            if (error.status === 401 || error.status === 419) {
+                                return;
+                            }
                             if (typeof Swal !== 'undefined') {
                                 Swal.close();
                             }
@@ -466,11 +469,9 @@
                                 }
                             } else {
                                 const errorMessages = {
-                                    401: 'Sesi anda sudah habis 🙏 <br>Silahkan muat ulang halaman untuk melanjutkan! <br> jika masalah masih terjadi silahkan login kembali!',
                                     403: 'Anda tidak memiliki izin untuk mengakses halaman ini 😖',
                                     404: 'Halaman yang dituju tidak ditemukan 🧐',
                                     405: 'Metode tidak valid 🧐 <br>silahkan muat ulang halaman dan coba lagi!',
-                                    419: 'Sesi anda sudah habis 🙏 <br>Silahkan muat ulang halaman untuk melanjutkan! <br> jika masalah masih terjadi silahkan login kembali!',
                                     429: 'Terlalu banyak permintaan akses <br>silahkan tunggu beberapa saat 🙏',
                                 };
                                 errorAlert(message || errorMessages[error.status] || "Terjadi kesalahan, silahkan coba memuat ulang halaman");
@@ -502,7 +503,7 @@
                 e.preventDefault();
                 loadingAlert(`Membersihkan data yang sudah diimport ......`);
 
-                let url = '{{route('admin.master-data.export-import-data.clear-data')}}';
+                let url = '{{ route('admin.master-data.export-import-data.clear-data', [], false) }}';
                 const request = new Request(
                     url, {
                         method: "GET",
@@ -526,6 +527,9 @@
                         dataReload("main_table");
                     })
                     .catch(error => {
+                        if (error.status === 401 || error.status === 419) {
+                            return;
+                        }
                         const payload = error.payload || error.error || {};
                         const errors = payload.error || payload.errors;
                         const message = payload.message || error.message;
@@ -536,11 +540,9 @@
                             }
                         } else {
                             const errorMessages = {
-                                401: 'Sesi anda sudah habis 🙏 <br>Silahkan muat ulang halaman untuk melanjutkan! <br> jika masalah masih terjadi silahkan login kembali!',
                                 403: 'Anda tidak memiliki izin untuk mengakses halaman ini 😖',
                                 404: 'Halaman yang dituju tidak ditemukan 🧐',
                                 405: 'Metode tidak valid 🧐 <br>silahkan muat ulang halaman dan coba lagi!',
-                                419: 'Sesi anda sudah habis 🙏 <br>Silahkan muat ulang halaman untuk melanjutkan! <br> jika masalah masih terjadi silahkan login kembali!',
                                 429: 'Terlalu banyak permintaan akses <br>silahkan tunggu beberapa saat 🙏',
                             };
                             errorAlert(message || errorMessages[error.status] || "Terjadi kesalahan, silahkan coba memuat ulang halaman");

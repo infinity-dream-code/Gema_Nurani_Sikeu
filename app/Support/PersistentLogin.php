@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -75,10 +76,35 @@ class PersistentLogin
                 return redirect()->to(self::stayUrl($request));
             }
 
-            return redirect()->to($request->fullUrlWithQuery(['_retry' => 1]));
+            return redirect()->to(self::retryUri($request));
         }
 
-        return redirect()->route('login');
+        return redirect('/login');
+    }
+
+    public static function bindRequestUrl(?Request $request = null): void
+    {
+        $request = $request ?: request();
+        if (!$request || !$request->getHost()) {
+            return;
+        }
+
+        try {
+            URL::forceRootUrl($request->getSchemeAndHttpHost());
+            if ($request->isSecure()) {
+                URL::forceScheme('https');
+            }
+        } catch (Throwable $e) {
+            //
+        }
+    }
+
+    public static function retryUri(Request $request): string
+    {
+        $query = $request->query();
+        $query['_retry'] = 1;
+
+        return self::relativeUri($request->getPathInfo(), $query);
     }
 
     public static function recreateSession(?Request $request = null): void
@@ -108,18 +134,28 @@ class PersistentLogin
         $candidates = [];
 
         if ($request->isMethod('GET')) {
-            $candidates[] = $request->fullUrl();
+            $candidates[] = self::relativeUri($request->getPathInfo(), $request->query());
         }
 
-        $candidates[] = url()->previous();
-        $candidates[] = url('/admin');
+        $referer = $request->headers->get('referer');
+        if (is_string($referer) && $referer !== '') {
+            $refererHost = (string) parse_url($referer, PHP_URL_HOST);
+            if ($refererHost !== '' && strcasecmp($refererHost, (string) $request->getHost()) === 0) {
+                $path = (string) parse_url($referer, PHP_URL_PATH);
+                $query = [];
+                parse_str((string) parse_url($referer, PHP_URL_QUERY), $query);
+                $candidates[] = self::relativeUri($path, $query);
+            }
+        }
+
+        $candidates[] = '/admin';
 
         foreach ($candidates as $url) {
             if (!is_string($url) || trim($url) === '') {
                 continue;
             }
 
-            $path = (string) parse_url($url, PHP_URL_PATH);
+            $path = (string) (parse_url($url, PHP_URL_PATH) ?: $url);
             $normalized = rtrim($path, '/') ?: '/';
             if (in_array($normalized, ['/login', '/home', '/logout'], true)) {
                 continue;
@@ -128,7 +164,14 @@ class PersistentLogin
             return self::urlWithoutRetry($url);
         }
 
-        return url('/admin');
+        return '/admin';
+    }
+
+    private static function relativeUri(string $path, array $query = []): string
+    {
+        $path = $path !== '' ? $path : '/';
+
+        return $query === [] ? $path : $path . '?' . http_build_query($query);
     }
 
     public static function cookieNames(): array

@@ -12,6 +12,8 @@ class StartSession extends Middleware
 {
     public function handle($request, Closure $next)
     {
+        PersistentLogin::bindRequestUrl($request);
+
         try {
             return parent::handle($request, $next);
         } catch (Throwable $e) {
@@ -34,7 +36,7 @@ class StartSession extends Middleware
                 PersistentLogin::restoreFromRequest($request);
 
                 if ($request->isMethod('GET') && !$request->boolean('_retry')) {
-                    return redirect()->to($request->fullUrlWithQuery(['_retry' => 1]));
+                    return redirect()->to(PersistentLogin::retryUri($request));
                 }
 
                 return $next($request);

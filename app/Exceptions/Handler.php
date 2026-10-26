@@ -84,7 +84,7 @@ class Handler extends ExceptionHandler
             PersistentLogin::restoreFromRequest($request);
 
             if ($request->isMethod('GET') && !$request->boolean('_retry')) {
-                return redirect()->to($request->fullUrlWithQuery(['_retry' => 1]));
+                return redirect()->to(PersistentLogin::retryUri($request));
             }
         }
 

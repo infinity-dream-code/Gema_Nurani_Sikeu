@@ -29,8 +29,8 @@ class ExportImportDataController extends Controller
         $data['title'] = $this->title;
         $data['mainTitle'] = $this->mainTitle;
         $data['dataTitle'] = $this->dataTitle;
-        $data['columnsUrl'] = route('admin.master-data.export-import-data.get-column');
-        $data['datasUrl'] = route('admin.master-data.export-import-data.get-data');
+        $data['columnsUrl'] = route('admin.master-data.export-import-data.get-column', [], false);
+        $data['datasUrl'] = route('admin.master-data.export-import-data.get-data', [], false);
 
         return view('admin.master_data.export_import_data.index', $data);
     }
