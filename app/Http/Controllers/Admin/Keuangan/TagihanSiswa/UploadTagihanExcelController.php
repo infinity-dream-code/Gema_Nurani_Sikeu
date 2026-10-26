@@ -243,6 +243,10 @@ class UploadTagihanExcelController extends Controller
                     (string) ($item['billperiod'] ?? ''),
                     (string) ($item['bta'] ?? ''),
                     (string) ($item['isnyicil'] ?? ''),
+                    $item['billcd'] ?? null,
+                    isset($siswa->CUSTID) ? (int) $siswa->CUSTID : null,
+                    $item['tanggalaktif'] ?? null,
+                    $item['tanggalberakhir'] ?? $item['expired'] ?? null,
                 );
                 $insertedCount++;
             }

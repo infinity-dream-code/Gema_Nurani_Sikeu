@@ -120,6 +120,8 @@ class ImportTagihanExcel implements ToCollection, WithHeadingRow
                 $billPeriod = $this->excelDate($rowData['tanggalaktif'] ?? null);
             }
             $rowData['billperiod'] = $billPeriod;
+            $rowData['tanggalaktif'] = $this->excelDate($rowData['tanggalaktif'] ?? null);
+            $rowData['tanggalberakhir'] = $this->excelDate($rowData['tanggalberakhir'] ?? null);
             if ($billPeriod === '') {
                 $rowData['status'] = 0;
                 $statusKet[] = 'Periode / Urutan / Tanggal Aktif tidak boleh kosong';
@@ -171,6 +173,7 @@ class ImportTagihanExcel implements ToCollection, WithHeadingRow
             'billperiod' => ['periode', 'billperiod'],
             'urutan' => ['urutan', 'furutan'],
             'tanggalaktif' => ['tanggalaktif', 'ftgltagihan'],
+            'tanggalberakhir' => ['tanggalberakhir', 'expired', 'tanggalexpire'],
             'bta' => ['atribut3', 'attribute3', 'atribute3', 'tahunajaran', 'tahunakademik', 'bta'],
             'isnyicil' => ['cicil', 'isnyicil'],
             'billcd' => ['nomortagihan', 'billcd'],
