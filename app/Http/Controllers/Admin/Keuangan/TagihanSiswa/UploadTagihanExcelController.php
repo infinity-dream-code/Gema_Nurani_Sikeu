@@ -75,13 +75,16 @@ class UploadTagihanExcelController extends Controller
         $select = [
             'scctcust.NMCUST',
             'scctcust.NOCUST',
+            'scctcust.NOVA',
             'scctcust.CODE02',
             'scctcust.DESC02',
         ];
 
         $records = collect($cachedData)->map(function ($item) use ($select) {
             $nis = (string) ($item['nocust'] ?? $item['nis'] ?? '');
-            $siswa = scctcust::select($select)->where('scctcust.NOCUST', $nis);
+            $siswa = scctcust::select($select)->where(function ($query) use ($nis) {
+                $query->where('scctcust.NOCUST', $nis)->orWhere('scctcust.NOVA', $nis);
+            });
             SchoolScope::apply($siswa, 'scctcust', $this->sekolah);
             $siswa = $siswa->first();
 
@@ -140,7 +143,10 @@ class UploadTagihanExcelController extends Controller
             $requiredColumns = ImportTagihanExcel::REQUIRED_COLUMNS;
             $missingColumns = [];
             foreach ($requiredColumns as $column) {
-                if (!in_array($column, $headings, true)) {
+                if ($column === 'cicil') {
+                    continue;
+                }
+                if (!ImportTagihanExcel::headingMatches($headings, $column)) {
                     $missingColumns[] = $column;
                 }
             }
@@ -213,9 +219,14 @@ class UploadTagihanExcelController extends Controller
                 }
 
                 $nocust = trim((string) ($item['nocust'] ?? $item['nis'] ?? ''));
-                $siswa = scctcust::where('NOCUST', $nocust);
+                $siswa = scctcust::where(function ($query) use ($nocust) {
+                    $query->where('NOCUST', $nocust)->orWhere('NOVA', $nocust);
+                });
                 SchoolScope::apply($siswa, 'scctcust', $this->sekolah);
                 $siswa = $siswa->first();
+                if ($siswa) {
+                    $nocust = (string) $siswa->NOCUST;
+                }
                 if (!$siswa) {
                     return response()->json(['message' => "Siswa dengan NIS {$nocust} tidak ditemukan."], 422);
                 }

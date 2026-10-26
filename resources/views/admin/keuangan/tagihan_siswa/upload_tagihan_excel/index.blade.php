@@ -50,7 +50,7 @@
             <div class="card-title">
                 <h5 class="mb-0">{{ $dataTitle ?? $mainTitle }}</h5>
                 <div class="text-muted small mt-1">
-                    Kolom Excel: NIS, Nominal, Nama Tagihan, Periode, Tahun Akademik, Cicil
+                    Kolom Excel: Nomor Tagihan, Nomor Pembayaran, Nama, Jenis Tagihan, Atribut 3, Total Nominal
                 </div>
             </div>
             <div class="card-header-elements ms-auto">
