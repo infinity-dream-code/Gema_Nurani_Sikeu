@@ -26,7 +26,7 @@ class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRo
     public function collection(Collection $collection): void
     {
         $cacheKey = 'import_data_siswa';
-        $requiredKeys = ['nama', 'unit', 'kelas', 'kelompok', 'angkatan'];
+        $requiredKeys = ['nama', 'unit', 'kelas', 'angkatan'];
         $parsedRows = [];
 
         foreach ($collection as $row) {
@@ -34,17 +34,17 @@ class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRo
                 continue;
             }
 
-            $rowData = $row->toArray();
+            $rowData = $this->mapRow($row->toArray());
             $rowData['unit'] = trim((string) ($rowData['unit'] ?? ''));
-            $rowData['kelas'] = is_numeric($rowData['kelas'] ?? null)
-                ? (string) (int) $rowData['kelas']
-                : trim((string) ($rowData['kelas'] ?? ''));
-            $rowData['kelompok'] = trim((string) ($rowData['kelompok'] ?? ''));
+            $rowData['kelas'] = trim((string) ($rowData['kelas'] ?? ''));
+            $rowData['kelompok'] = trim((string) ($rowData['kelompok'] ?? '')) ?: '-';
             $rowData['nama'] = trim((string) ($rowData['nama'] ?? ''));
             $rowData['angkatan'] = trim((string) ($rowData['angkatan'] ?? ''));
+            $rowData['email'] = trim((string) ($rowData['email'] ?? '')) ?: null;
+            $rowData['nova'] = trim((string) ($rowData['nova'] ?? $rowData['nomorpembayaran'] ?? '')) ?: null;
 
-            $nis = isset($rowData['nis']) ? trim((string) $rowData['nis']) : '';
-            $nodaftar = isset($rowData['nodaftar']) ? trim((string) $rowData['nodaftar']) : '';
+            $nis = trim((string) ($rowData['nis'] ?? $rowData['nova'] ?? ''));
+            $nodaftar = trim((string) ($rowData['nodaftar'] ?? ''));
             $rowData['nis'] = $nis !== '' ? $nis : null;
             $rowData['nodaftar'] = $nodaftar !== '' ? $nodaftar : null;
             $rowData['ortu'] = trim((string) ($rowData['ortu'] ?? $rowData['genus'] ?? $rowData['ayah'] ?? '')) ?: null;
@@ -61,7 +61,14 @@ class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRo
         $nodaftarList = array_values(array_filter(array_column($parsedRows, 'nodaftar')));
 
         $existingNis = $nisList !== []
-            ? scctcust::whereIn('NOCUST', $nisList)->pluck('NOCUST')->flip()->all()
+            ? scctcust::whereIn('NOCUST', $nisList)
+                ->orWhereIn('NOVA', $nisList)
+                ->pluck('NOCUST')
+                ->merge(
+                    scctcust::whereIn('NOVA', $nisList)->pluck('NOVA')
+                )
+                ->flip()
+                ->all()
             : [];
         $existingNodaftar = $nodaftarList !== []
             ? scctcust::whereIn('NUM2ND', $nodaftarList)->pluck('NUM2ND')->flip()->all()
@@ -85,9 +92,9 @@ class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRo
                 }
             }
 
-            if ($rowData['nis'] && !is_numeric($rowData['nis'])) {
+            if ($rowData['nis'] && !preg_match('/^[0-9\-]+$/', (string) $rowData['nis'])) {
                 $rowData['status'] = 0;
-                $statusKet = $this->appendKet($statusKet, 'NIS harus berupa angka');
+                $statusKet = $this->appendKet($statusKet, 'Nomor Pembayaran / NIS harus berupa angka');
             } elseif ($rowData['nis'] && isset($existingNis[$rowData['nis']]) && (int) $rowData['status'] !== 0) {
                 $rowData['status'] = 2;
                 $statusKet = $this->appendKet(
@@ -112,6 +119,39 @@ class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRo
         }
 
         Cache::put($cacheKey, $processedData, now()->addMinutes(60));
+    }
+
+    private function mapRow(array $row): array
+    {
+        $normalized = [];
+        foreach ($row as $key => $value) {
+            $normalized[strtolower(preg_replace('/[^a-z0-9]+/i', '', (string) $key) ?? '')] = $value;
+        }
+
+        $aliases = [
+            'nama' => ['nama'],
+            'unit' => ['unit', 'atribut2', 'attribute2', 'atribute2'],
+            'kelas' => ['kelas', 'atribut1', 'attribute1', 'atribute1'],
+            'angkatan' => ['angkatan', 'atribut3', 'attribute3', 'atribute3', 'tahunajaran', 'tahunakademik'],
+            'kelompok' => ['kelompok'],
+            'nis' => ['nis', 'nomorpembayaran', 'nova', 'nopembayaran'],
+            'nodaftar' => ['nodaftar', 'nomorpendaftaran'],
+            'email' => ['email'],
+            'nova' => ['nova', 'nomorpembayaran', 'nopembayaran'],
+            'nomorpembayaran' => ['nomorpembayaran', 'nova', 'nopembayaran'],
+            'nomortagihan' => ['nomortagihan', 'billcd'],
+        ];
+
+        foreach ($aliases as $canonical => $keys) {
+            foreach ($keys as $key) {
+                if (isset($normalized[$key]) && $normalized[$key] !== null && $normalized[$key] !== '') {
+                    $normalized[$canonical] = $normalized[$key];
+                    break;
+                }
+            }
+        }
+
+        return $normalized;
     }
 
     private function appendKet(?string $current, string $message): string

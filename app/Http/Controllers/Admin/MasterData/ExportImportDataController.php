@@ -157,9 +157,9 @@ class ExportImportDataController extends Controller
 
         try {
             $requiredColumns = [
-                'nama', 'unit', 'kelas', 'kelompok', 'angkatan',
+                'nama', 'unit', 'kelas', 'angkatan',
             ];
-            $conditionalColumns = ['nis', 'nodaftar'];
+            $conditionalColumns = ['nis', 'nodaftar', 'nomorpembayaran'];
 
             [$headingRow, $headings] = $this->resolveImportHeadings($file, $requiredColumns);
 
@@ -168,11 +168,12 @@ class ExportImportDataController extends Controller
             }
 
             $missingColumns = [];
-            $hasNis = in_array('nis', $headings, true);
-            $hasNodaftar = in_array('nodaftar', $headings, true);
+            $hasIdentity = in_array('nis', $headings, true)
+                || in_array('nodaftar', $headings, true)
+                || in_array('nomorpembayaran', $headings, true);
 
-            if (!$hasNis && !$hasNodaftar) {
-                $missingColumns[] = 'NIS / NODAFTAR';
+            if (!$hasIdentity) {
+                $missingColumns[] = 'Nomor Pembayaran / NIS / NODAFTAR';
             }
             foreach ($requiredColumns as $column) {
                 if (!in_array($column, $headings, true)) {
@@ -181,12 +182,9 @@ class ExportImportDataController extends Controller
             }
 
             if (!empty($missingColumns)) {
-                $formattedMissingColumns = strtoupper(str_replace('_', ' ', implode(', ', $missingColumns)));
-                $formattedRequiredColumns = strtoupper(str_replace('_', ' ', implode(', ', array_merge($requiredColumns, $conditionalColumns))));
                 throw new Exception(
-                    "Kolom $formattedMissingColumns tidak ditemukan.<br><hr>
-                               pastikan kolom berikut ada dan terisi pada file import yang akan diproses: $formattedRequiredColumns. <br>
-                               Catatan: NIS atau NODAFTAR wajib salah satu terisi."
+                    "Kolom " . strtoupper(implode(', ', $missingColumns)) . " tidak ditemukan.<br><hr>
+                    Pastikan file memakai template: Nomor Tagihan, Nomor Pembayaran, Nama, Email, Tanggal Aktif, Tanggal Berakhir, Urutan, Jenis Tagihan, Atribut 1, Atribut 2, Atribut 3, Total Nominal."
                 );
             }
 
@@ -429,13 +427,30 @@ class ExportImportDataController extends Controller
 
         $normalized = [];
         foreach ($headings as $heading) {
-            $value = strtolower(trim((string) $heading));
+            $value = strtolower(preg_replace('/[^a-z0-9]+/i', '', (string) $heading) ?? '');
             if ($value !== '') {
                 $normalized[] = $value;
             }
         }
 
-        return $normalized;
+        $aliases = [
+            'nama' => ['nama'],
+            'unit' => ['unit', 'atribut2', 'attribute2', 'atribute2'],
+            'kelas' => ['kelas', 'atribut1', 'attribute1', 'atribute1'],
+            'angkatan' => ['angkatan', 'atribut3', 'attribute3', 'atribute3', 'tahunajaran', 'tahunakademik'],
+            'nis' => ['nis', 'nomorpembayaran', 'nova', 'nopembayaran'],
+            'nodaftar' => ['nodaftar', 'nomorpendaftaran'],
+            'nomorpembayaran' => ['nomorpembayaran', 'nova', 'nopembayaran'],
+            'kelompok' => ['kelompok'],
+        ];
+
+        foreach ($aliases as $canonical => $keys) {
+            if (array_intersect($normalized, $keys)) {
+                $normalized[] = $canonical;
+            }
+        }
+
+        return array_values(array_unique($normalized));
     }
 
     private function headingsLookValid(array $headings, array $requiredColumns): bool
@@ -444,7 +459,9 @@ class ExportImportDataController extends Controller
             return false;
         }
 
-        $hasIdentity = in_array('nis', $headings, true) || in_array('nodaftar', $headings, true);
+        $hasIdentity = in_array('nis', $headings, true)
+            || in_array('nodaftar', $headings, true)
+            || in_array('nomorpembayaran', $headings, true);
         if (!$hasIdentity) {
             return false;
         }
@@ -488,7 +505,12 @@ class ExportImportDataController extends Controller
 
     private function resolveSchoolCode(array $item): string
     {
-        return mb_substr(trim((string) ($item['unit'] ?? '')), 0, 5);
+        $unit = trim((string) ($item['unit'] ?? ''));
+        if (stripos($unit, 'SDIT') !== false) {
+            return 'SDIT';
+        }
+
+        return mb_substr($unit, 0, 5);
     }
 
     private function buildScctcustPayload(
@@ -504,13 +526,15 @@ class ExportImportDataController extends Controller
             'NUM2ND' => $item['nodaftar'] ?? '-',
             'STCUST' => 1,
             'CODE01' => $code01,
-            'DESC01' => $code01,
+            'DESC01' => $item['unit'] ?? $code01,
             'CODE02' => $item['unit'] ?? null,
             'DESC02' => $item['kelas'] ?? null,
-            'DESC03' => $item['kelompok'] ?? null,
+            'DESC03' => $item['kelompok'] ?? '-',
             'CODE04' => $item['gender'] ?? null,
             'DESC04' => $item['angkatan'] ?? null,
             'DESC05' => $item['alamat'] ?? null,
+            'EMAIL' => $item['email'] ?? null,
+            'NOVA' => $item['nova'] ?? $item['nomorpembayaran'] ?? $item['nis'] ?? null,
             'GENUS' => $this->resolveOrtuForDb($item),
             'LastUpdate' => Carbon::now(),
         ];
