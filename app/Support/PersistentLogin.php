@@ -7,11 +7,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
 use Throwable;
 
 class PersistentLogin
 {
-    public const COOKIE = 'installment_malas';
+    public const COOKIE = 'gema_nurani';
+
+    public const LEGACY_COOKIE = 'installment_malas';
 
     public static function lifetimeMinutes(): int
     {
@@ -43,13 +46,7 @@ class PersistentLogin
 
     public static function unauthenticatedResponse(Request $request)
     {
-        $isAjax = $request->expectsJson()
-            || $request->ajax()
-            || $request->wantsJson()
-            || $request->header('X-Requested-With') === 'XMLHttpRequest'
-            || str_contains((string) $request->header('Accept'), 'application/json');
-
-        if ($isAjax) {
+        if (self::isAjax($request)) {
             $csrf = null;
             try {
                 $csrf = csrf_token();
@@ -65,25 +62,123 @@ class PersistentLogin
             ], 401);
         }
 
-        $hasStayCookie = $request->cookies->has(self::COOKIE)
-            || $request->cookies->has((string) config('session.cookie'))
-            || isset($_COOKIE[self::COOKIE])
-            || isset($_COOKIE[(string) config('session.cookie')]);
+        $user = self::restoreFromRequest($request);
+        if ($user) {
+            return redirect()->to(self::stayUrl($request));
+        }
 
-        // Ada jejak login → jangan lempar ke login; retry URL yang sama.
-        if ($hasStayCookie && !$request->boolean('_retry')) {
+        if (!$request->boolean('_retry') && self::hasStaySignal($request)) {
+            self::recreateSession($request);
+            self::restoreFromRequest($request);
+
+            if (Auth::user() instanceof CyberKey) {
+                return redirect()->to(self::stayUrl($request));
+            }
+
             return redirect()->to($request->fullUrlWithQuery(['_retry' => 1]));
         }
 
-        if ($hasStayCookie) {
-            $fallback = $request->isMethod('GET')
-                ? $request->url()
-                : (url()->previous() ?: url('/admin'));
+        return redirect()->route('login');
+    }
 
-            return redirect()->to($fallback);
+    public static function recreateSession(?Request $request = null): void
+    {
+        $request = $request ?: request();
+
+        try {
+            if ($request->hasSession()) {
+                $session = $request->session();
+                try {
+                    $session->regenerate(true);
+                } catch (Throwable $e) {
+                    $session->setId(Str::random(40));
+                    if (!$session->isStarted()) {
+                        $session->start();
+                    }
+                }
+                $session->regenerateToken();
+            }
+        } catch (Throwable $e) {
+            //
+        }
+    }
+
+    public static function stayUrl(Request $request): string
+    {
+        $candidates = [];
+
+        if ($request->isMethod('GET')) {
+            $candidates[] = $request->fullUrl();
         }
 
-        return redirect()->route('login');
+        $candidates[] = url()->previous();
+        $candidates[] = url('/admin');
+
+        foreach ($candidates as $url) {
+            if (!is_string($url) || trim($url) === '') {
+                continue;
+            }
+
+            $path = (string) parse_url($url, PHP_URL_PATH);
+            $normalized = rtrim($path, '/') ?: '/';
+            if (in_array($normalized, ['/login', '/home', '/logout'], true)) {
+                continue;
+            }
+
+            return self::urlWithoutRetry($url);
+        }
+
+        return url('/admin');
+    }
+
+    public static function cookieNames(): array
+    {
+        return array_values(array_unique([self::COOKIE, self::LEGACY_COOKIE]));
+    }
+
+    private static function hasStaySignal(Request $request): bool
+    {
+        foreach (self::cookieNames() as $name) {
+            if ($request->cookies->has($name) || isset($_COOKIE[$name])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function isAjax(Request $request): bool
+    {
+        return $request->expectsJson()
+            || $request->ajax()
+            || $request->wantsJson()
+            || $request->header('X-Requested-With') === 'XMLHttpRequest'
+            || str_contains((string) $request->header('Accept'), 'application/json');
+    }
+
+    private static function urlWithoutRetry(string $url): string
+    {
+        $parts = parse_url($url);
+        if ($parts === false) {
+            return $url;
+        }
+
+        $query = [];
+        parse_str((string) ($parts['query'] ?? ''), $query);
+        unset($query['_retry']);
+
+        $rebuilt = ($parts['scheme'] ?? null)
+            ? ($parts['scheme'] . '://' . ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : ''))
+            : '';
+        $rebuilt .= $parts['path'] ?? '';
+        if ($query !== []) {
+            $rebuilt .= '?' . http_build_query($query);
+        }
+        if (!empty($parts['fragment'])) {
+            $rebuilt .= '#' . $parts['fragment'];
+        }
+
+        return $rebuilt !== '' ? $rebuilt : $url;
     }
 
     public static function bind(?CyberKey $user): void
@@ -121,17 +216,19 @@ class PersistentLogin
 
     public static function forget(): void
     {
-        Cookie::queue(cookie(
-            self::COOKIE,
-            '',
-            -2628000,
-            config('session.path', '/'),
-            config('session.domain'),
-            self::secure(),
-            true,
-            false,
-            config('session.same_site', 'lax')
-        ));
+        foreach (self::cookieNames() as $name) {
+            Cookie::queue(cookie(
+                $name,
+                '',
+                -2628000,
+                config('session.path', '/'),
+                config('session.domain'),
+                self::secure(),
+                true,
+                false,
+                config('session.same_site', 'lax')
+            ));
+        }
     }
 
     public static function userFromRequest(Request $request): ?CyberKey
@@ -174,13 +271,15 @@ class PersistentLogin
 
     private static function rawCookieValue(Request $request): ?string
     {
-        foreach ([
-            $request->cookie(self::COOKIE),
-            $request->cookies->get(self::COOKIE),
-            $_COOKIE[self::COOKIE] ?? null,
-        ] as $raw) {
-            if (is_string($raw) && trim($raw) !== '') {
-                return trim($raw);
+        foreach (self::cookieNames() as $name) {
+            foreach ([
+                $request->cookie($name),
+                $request->cookies->get($name),
+                $_COOKIE[$name] ?? null,
+            ] as $raw) {
+                if (is_string($raw) && trim($raw) !== '') {
+                    return trim($raw);
+                }
             }
         }
 

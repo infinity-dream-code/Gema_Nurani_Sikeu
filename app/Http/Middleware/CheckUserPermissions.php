@@ -14,6 +14,11 @@ class CheckUserPermissions
         PersistentLogin::restoreFromRequest($request);
 
         if (!Auth::check()) {
+            PersistentLogin::recreateSession($request);
+            PersistentLogin::restoreFromRequest($request);
+        }
+
+        if (!Auth::check()) {
             return PersistentLogin::unauthenticatedResponse($request);
         }
         $user = Auth::user();

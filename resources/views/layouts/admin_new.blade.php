@@ -438,7 +438,14 @@
     window.fetch = function (input, init) {
         init = init || {};
         return originalFetch(input, init).then(function (response) {
-            if (!shouldSilentRetry(response.status) || init._retried) {
+            if (!shouldSilentRetry(response.status)) {
+                return response;
+            }
+            if (init._retried) {
+                if (!window.__sessionReloadArmed) {
+                    window.__sessionReloadArmed = true;
+                    window.location.reload();
+                }
                 return response;
             }
 
@@ -446,6 +453,10 @@
                 window.pingKeepAlive(function (data) {
                     const token = csrfFromKeepAlive(data);
                     if (!token) {
+                        if (!window.__sessionReloadArmed) {
+                            window.__sessionReloadArmed = true;
+                            window.location.reload();
+                        }
                         resolve(response);
                         return;
                     }
@@ -482,7 +493,7 @@
             var originalError = options.error;
             if (typeof originalError === 'function') {
                 options.error = function (jqXHR, textStatus, errorThrown) {
-                    if (jqXHR && shouldSilentRetry(jqXHR.status) && !options._retried) {
+                    if (jqXHR && shouldSilentRetry(jqXHR.status)) {
                         return;
                     }
                     return originalError.apply(this, arguments);
@@ -491,7 +502,11 @@
         });
 
         $(document).ajaxError(function (event, jqXHR, ajaxSettings) {
-            if (shouldSilentRetry(jqXHR.status) && !ajaxSettings._retried) {
+            if (!shouldSilentRetry(jqXHR.status)) {
+                return;
+            }
+
+            if (!ajaxSettings._retried) {
                 ajaxSettings._retried = true;
                 window.pingKeepAlive(function (data) {
                     const token = csrfFromKeepAlive(data);
@@ -503,8 +518,19 @@
                             ajaxSettings.data = ajaxSettings.data.replace(/_token=[^&]*/, '_token=' + encodeURIComponent(token));
                         }
                         $.ajax(ajaxSettings);
+                        return;
+                    }
+                    if (!window.__sessionReloadArmed) {
+                        window.__sessionReloadArmed = true;
+                        window.location.reload();
                     }
                 });
+                return;
+            }
+
+            if (!window.__sessionReloadArmed) {
+                window.__sessionReloadArmed = true;
+                window.location.reload();
             }
         });
 

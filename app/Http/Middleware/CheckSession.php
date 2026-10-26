@@ -14,6 +14,11 @@ class CheckSession
         PersistentLogin::restoreFromRequest($request);
 
         if (!Auth::check() && !session()->has('user')) {
+            PersistentLogin::recreateSession($request);
+            PersistentLogin::restoreFromRequest($request);
+        }
+
+        if (!Auth::check() && !session()->has('user')) {
             return PersistentLogin::unauthenticatedResponse($request);
         }
 

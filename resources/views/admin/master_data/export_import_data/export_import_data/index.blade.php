@@ -102,12 +102,12 @@
                         <ul class="list-group list-group-timeline mb-3">
                             <li class="list-group-item list-group-timeline-danger">File harus berformat <span class="fw-bold">XLS/XLSX</span>.</li>
                             <li class="list-group-item list-group-timeline-danger">Ukuran file tidak boleh lebih dari <span class="fw-bold">1024KB/1MB</span>.</li>
-                            <li class="list-group-item list-group-timeline-danger">Kolom wajib: <span class="fw-bold">NIS, Nama, Unit, Kelas, Kelompok, Angkatan</span>.</li>
-                            <li class="list-group-item list-group-timeline-danger">Kolom opsional: <span class="fw-bold">Gender, Alamat, Ortu</span> (bukan Ayah/Ibu).</li>
+                            <li class="list-group-item list-group-timeline-danger">Kolom wajib: <span class="fw-bold">Nomor Tagihan, Nomor Pembayaran, Nama, Email, Tanggal Aktif, Tanggal Berakhir, Urutan, Jenis Tagihan, Atribut 1, Atribut 2, Atribut 3, Total Nominal</span>.</li>
+                            <li class="list-group-item list-group-timeline-danger">Satu file untuk siswa dan tagihan sekaligus. Nomor Pembayaran = VA 13 digit. Jenis Tagihan = kode di master tagihan.</li>
                             <li class="list-group-item list-group-timeline-danger">Contoh file yang dapat diproses untuk import:
                                 <a class="btn btn-sm btn-outline-primary fw-bolder"
-                                   href="{{asset('TEMPLATE MENU UPLOAD DATA SISWA.xlsx')}}"
-                                   download>
+                                   href="{{ asset('contoh_excel/TEMPLATE UPLOAD SISWA DAN TAGIHAN.xlsx') }}?v={{ filemtime(public_path('contoh_excel/TEMPLATE UPLOAD SISWA DAN TAGIHAN.xlsx')) }}"
+                                   download="TEMPLATE UPLOAD SISWA DAN TAGIHAN.xlsx">
                                     <i class="ri ri-file-excel-line me-2"></i>Contoh File
                                 </a>
                             </li>

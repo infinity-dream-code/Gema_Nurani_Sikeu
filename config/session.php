@@ -124,7 +124,7 @@ return [
     |
     */
 
-    'cookie' => env('SESSION_COOKIE', 'demo_installment_session'),
+    'cookie' => env('SESSION_COOKIE', 'gema_nurani_session'),
 
     /*
     |--------------------------------------------------------------------------

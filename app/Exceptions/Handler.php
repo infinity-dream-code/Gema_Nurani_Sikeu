@@ -36,6 +36,7 @@ class Handler extends ExceptionHandler
     public function render($request, Throwable $e)
     {
         if ($e instanceof TokenMismatchException) {
+            PersistentLogin::recreateSession($request);
             PersistentLogin::restoreFromRequest($request);
 
             if ($request->hasSession()) {
@@ -55,14 +56,12 @@ class Handler extends ExceptionHandler
                 ], 419);
             }
 
-            if ($request->isMethod('GET')) {
-                return redirect()->to($request->fullUrl());
-            }
-
-            return redirect()->back()->withInput($request->except('_token', 'password', 'password_confirmation'));
+            return redirect()->to(PersistentLogin::stayUrl($request))
+                ->withInput($request->except('_token', 'password', 'password_confirmation'));
         }
 
         if ($e instanceof AuthenticationException) {
+            PersistentLogin::recreateSession($request);
             $user = PersistentLogin::restoreFromRequest($request);
             if ($user) {
                 if ($this->isAjaxRequest($request)) {
@@ -74,22 +73,20 @@ class Handler extends ExceptionHandler
                     ], 401);
                 }
 
-                if ($request->isMethod('GET')) {
-                    return redirect()->to($request->fullUrlWithQuery(['_retry' => 1]));
-                }
-
-                return redirect()->back()->withInput($request->except('_token', 'password', 'password_confirmation'));
+                return redirect()->to(PersistentLogin::stayUrl($request))
+                    ->withInput($request->except('_token', 'password', 'password_confirmation'));
             }
 
             return PersistentLogin::unauthenticatedResponse($request);
         }
 
-        if (
-            $request->isMethod('GET')
-            && !$request->boolean('_retry')
-            && $this->isTransientServerError($e)
-        ) {
-            return redirect()->to($request->fullUrlWithQuery(['_retry' => 1]));
+        if ($this->isTransientServerError($e)) {
+            PersistentLogin::recreateSession($request);
+            PersistentLogin::restoreFromRequest($request);
+
+            if ($request->isMethod('GET') && !$request->boolean('_retry')) {
+                return redirect()->to($request->fullUrlWithQuery(['_retry' => 1]));
+            }
         }
 
         if ($this->isAjaxRequest($request) && $this->isTransientServerError($e)) {
@@ -107,6 +104,7 @@ class Handler extends ExceptionHandler
 
     protected function unauthenticated($request, AuthenticationException $exception)
     {
+        PersistentLogin::recreateSession($request);
         $user = PersistentLogin::restoreFromRequest($request);
         if ($user) {
             if ($this->isAjaxRequest($request) || $request->expectsJson()) {
@@ -118,7 +116,7 @@ class Handler extends ExceptionHandler
                 ], 401);
             }
 
-            return redirect()->to($request->fullUrlWithQuery(['_retry' => 1]));
+            return redirect()->to(PersistentLogin::stayUrl($request));
         }
 
         return PersistentLogin::unauthenticatedResponse($request);
