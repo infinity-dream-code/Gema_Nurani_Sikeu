@@ -264,12 +264,16 @@ class ExportImportDataController extends Controller
                         (string) ($item['nama'] ?? ''),
                         (string) ($item['kelas'] ?? ''),
                         (string) ($item['unit'] ?? ''),
-                        (string) ($item['unit'] ?? ''),
-                        (string) ($item['kelompok'] ?? ''),
+                        $this->resolveSchoolCode($item),
+                        (string) ($item['kelompok'] ?? '-'),
                         (string) ($item['angkatan'] ?? ''),
                         $item['alamat'] ?? null,
                         $item['gender'] ?? null,
                         $this->resolveOrtuForDb($item),
+                        null,
+                        $item['nova'] ?? $item['nomorpembayaran'] ?? $nis,
+                        $item['email'] ?? null,
+                        $item['nodaftar'] ?? null,
                     );
 
                     $saved++;
