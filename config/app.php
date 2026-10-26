@@ -16,14 +16,14 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Demo Installment'),
-    'nama_instansi' => env('APP_NAMA_INSTANSI', 'Demo Installment'),
-    'alamat' => env('APP_ALAMAT', 'Kota Jakarta Timur, Prov. DKI Jakarta'),
-    'logo' => env('APP_LOGO', 'ictkui.png'),
+    'name' => env('APP_NAME', 'SD IT Gema Nurani'),
+    'nama_instansi' => env('APP_NAMA_INSTANSI', 'SD IT Gema Nurani'),
+    'alamat' => env('APP_ALAMAT', 'Kec. Bekasi Utara, Kota Bks, Jawa Barat'),
+    'logo' => env('APP_LOGO', 'icon-sdit.jpeg'),
     'email' => env('APP_EMAIL', 'ypisabkho@gmail.com'),
     'telepon' => env('APP_TELEPON', 'SIKEU'),
-    'domisili' => env('APP_DOMISILI', 'Jakarta Timur'),
-    'nova' => env('APP_NOVA') ?: '751000',
+    'domisili' => env('APP_DOMISILI', 'Bekasi Utara'),
+    'nova' => env('APP_NOVA') ?: '752000',
     'biaya_admin' => env('BIAYA_ADMIN', 0),
     'dummy_seeder' => env('DUMMY_SEEDER',false),
     'demo_mode' => env('DEMO_MODE',false),

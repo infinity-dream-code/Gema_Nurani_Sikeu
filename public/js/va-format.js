@@ -1,9 +1,9 @@
 /**
  * Format No. VA: prefix + NIS (total 16 digit).
- * Contoh: 797783 + 123 => 7977830000000123
+ * Contoh: 752000 + 123 => 7520000000000123
  */
 (function (window) {
-    const DEFAULT_PREFIX = '797783';
+    const DEFAULT_PREFIX = '752000';
     const TOTAL_LENGTH = 16;
 
     window.formatNoVA = function (nis, prefix) {
