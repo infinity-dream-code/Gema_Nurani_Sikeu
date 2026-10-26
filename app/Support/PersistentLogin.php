@@ -144,6 +144,12 @@ class PersistentLogin
             }
         }
 
+        foreach (['gema_nurani_session', 'demo_installment_session', (string) config('session.cookie')] as $name) {
+            if ($name !== '' && ($request->cookies->has($name) || isset($_COOKIE[$name]))) {
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -188,11 +194,14 @@ class PersistentLogin
         }
 
         $guard = Auth::guard();
-        if (method_exists($guard, 'getName') && session()->isStarted()) {
-            session()->put($guard->getName(), $user->getAuthIdentifier());
+        try {
+            $guard->login($user);
+        } catch (Throwable $e) {
+            if (method_exists($guard, 'getName') && session()->isStarted()) {
+                session()->put($guard->getName(), $user->getAuthIdentifier());
+            }
+            $guard->setUser($user);
         }
-
-        $guard->setUser($user);
     }
 
     public static function queue(?CyberKey $user): void

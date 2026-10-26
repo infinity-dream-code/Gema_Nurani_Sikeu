@@ -42,6 +42,13 @@ class StartSession extends Middleware
         }
     }
 
+    public function getSession($request)
+    {
+        return tap($this->manager->driver(), function ($session) use ($request) {
+            $session->setId($this->resolveSessionId($request, $session->getName()));
+        });
+    }
+
     protected function startSession($request, $session)
     {
         try {
@@ -54,6 +61,22 @@ class StartSession extends Middleware
 
             return $session;
         }
+    }
+
+    private function resolveSessionId($request, string $currentName): ?string
+    {
+        foreach (array_values(array_unique(array_filter([
+            $currentName,
+            'gema_nurani_session',
+            'demo_installment_session',
+        ]))) as $name) {
+            $raw = $request->cookies->get($name);
+            if (is_string($raw) && trim($raw) !== '') {
+                return $raw;
+            }
+        }
+
+        return null;
     }
 
     protected function saveSession($request)

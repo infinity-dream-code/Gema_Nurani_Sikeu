@@ -61,7 +61,6 @@ class Handler extends ExceptionHandler
         }
 
         if ($e instanceof AuthenticationException) {
-            PersistentLogin::recreateSession($request);
             $user = PersistentLogin::restoreFromRequest($request);
             if ($user) {
                 if ($this->isAjaxRequest($request)) {
@@ -104,7 +103,6 @@ class Handler extends ExceptionHandler
 
     protected function unauthenticated($request, AuthenticationException $exception)
     {
-        PersistentLogin::recreateSession($request);
         $user = PersistentLogin::restoreFromRequest($request);
         if ($user) {
             if ($this->isAjaxRequest($request) || $request->expectsJson()) {

@@ -18,8 +18,13 @@ class LoginController extends Controller
 {
     use AuthenticatesUsers;
 
-    public function showLoginForm(Request $request): View
+    public function showLoginForm(Request $request): View|RedirectResponse
     {
+        \App\Support\PersistentLogin::restoreFromRequest($request);
+        if (Auth::check()) {
+            return redirect('/admin');
+        }
+
         if ($request->has("cf_fallback")) {
             if ($request->boolean("cf_fallback")) {
                 session(["auth_cf_fallback" => true]);
