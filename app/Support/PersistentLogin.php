@@ -69,10 +69,10 @@ class PersistentLogin
         }
 
         if (!$request->boolean('_retry') && self::hasStaySignal($request)) {
-            self::recreateSession($request);
-            self::restoreFromRequest($request);
+            self::touchCsrf($request);
+            $user = self::restoreFromRequest($request);
 
-            if (Auth::user() instanceof CyberKey) {
+            if ($user instanceof CyberKey) {
                 return redirect()->to(self::stayUrl($request));
             }
 
@@ -109,20 +109,16 @@ class PersistentLogin
 
     public static function recreateSession(?Request $request = null): void
     {
+        self::touchCsrf($request);
+    }
+
+    public static function touchCsrf(?Request $request = null): void
+    {
         $request = $request ?: request();
 
         try {
             if ($request->hasSession()) {
-                $session = $request->session();
-                try {
-                    $session->regenerate(true);
-                } catch (Throwable $e) {
-                    $session->setId(Str::random(40));
-                    if (!$session->isStarted()) {
-                        $session->start();
-                    }
-                }
-                $session->regenerateToken();
+                $request->session()->regenerateToken();
             }
         } catch (Throwable $e) {
             //
@@ -238,7 +234,7 @@ class PersistentLogin
 
         $guard = Auth::guard();
         try {
-            $guard->login($user);
+            $guard->login($user, false);
         } catch (Throwable $e) {
             if (method_exists($guard, 'getName') && session()->isStarted()) {
                 session()->put($guard->getName(), $user->getAuthIdentifier());
@@ -257,12 +253,12 @@ class PersistentLogin
             self::COOKIE,
             self::encodePayload($user),
             self::lifetimeMinutes(),
-            config('session.path', '/'),
-            config('session.domain'),
+            '/',
+            self::cookieDomain(),
             self::secure(),
             true,
             false,
-            config('session.same_site', 'lax')
+            'lax'
         ));
     }
 
@@ -273,12 +269,12 @@ class PersistentLogin
                 $name,
                 '',
                 -2628000,
-                config('session.path', '/'),
-                config('session.domain'),
+                '/',
+                self::cookieDomain(),
                 self::secure(),
                 true,
                 false,
-                config('session.same_site', 'lax')
+                'lax'
             ));
         }
     }
@@ -417,6 +413,16 @@ class PersistentLogin
         return hash_hmac('sha256', $encoded, (string) config('app.key'));
     }
 
+    private static function cookieDomain(): ?string
+    {
+        $domain = config('session.domain');
+        if (!is_string($domain) || trim($domain) === '') {
+            return null;
+        }
+
+        return $domain;
+    }
+
     private static function secure(): bool
     {
         $configured = config('session.secure');
@@ -424,7 +430,6 @@ class PersistentLogin
             return filter_var($configured, FILTER_VALIDATE_BOOLEAN);
         }
 
-        // Local HTTP: jangan set Secure supaya cookie tetap terkirim.
         return (bool) request()?->isSecure();
     }
 }
