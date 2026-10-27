@@ -38,6 +38,13 @@ return [
         ),
     ],
 
+    "email_broadcaster" => [
+        "url" => env("EMAIL_BROADCASTER_URL", "http://101.50.2.56/emailBroadcaster"),
+        "token" => env("EMAIL_BROADCASTER_TOKEN", ""),
+        "payment_link" => env("EMAIL_BROADCASTER_PAYMENT_LINK", "https://sditgemanurani.smartpayment.co.id"),
+        "timeout" => (int) env("EMAIL_BROADCASTER_TIMEOUT", 45),
+    ],
+
     "turnstile" => [
         "enabled" => env("TURNSTILE_ENABLED", true),
         "site_key" => env("TURNSTILE_SITE_KEY")

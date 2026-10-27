@@ -84,6 +84,7 @@ Route::prefix("admin")
                     Route::post("reset-login-android/{id}", "ResetLoginAndroid")->name("reset-login-android");
                     Route::post("reset-login-android-bulk", "resetLoginAndroidBulk")->name("reset-login-android-bulk");
                     Route::post("set-status-siswa/{id}", "setStatusSiswa")->name("set-status-siswa");
+                    Route::post("send-email/{id}", "sendEmail")->name("send-email");
                 });
             Route::resource("data-siswa", \App\Http\Controllers\Admin\MasterData\DataSiswaController::class)->names("data-siswa");
 
@@ -131,6 +132,15 @@ Route::prefix("admin")
                         Route::delete("hapus/{id}", "hapusTagihan")->name("hapus");
                         Route::get("cetak-kartu-siswa", "cetakKartuSiswa")->name("cetak-kartu-siswa");
                         Route::resource("", \App\Http\Controllers\Admin\Keuangan\TagihanSiswa\DataTagihanController::class)->parameters(["" => "id"]);
+                    });
+                });
+
+                Route::prefix("email-broadcast")->name("email-broadcast.")->group(function () {
+                    Route::controller(\App\Http\Controllers\Admin\Keuangan\EmailBroadcastController::class)->group(function () {
+                        Route::get("get-data", "getData")->name("get-data");
+                        Route::get("get-column", "getColumn")->name("get-column");
+                        Route::post("queue", "queue")->name("queue");
+                        Route::resource("", \App\Http\Controllers\Admin\Keuangan\EmailBroadcastController::class)->parameters(["" => "id"]);
                     });
                 });
 

@@ -8,6 +8,8 @@ use App\Models\mst_sekolah;
 use App\Models\scctcust;
 use App\Models\ValidationMessage;
 use App\Support\AndroidLogonFixerProcedure;
+use App\Support\EmailBroadcasterClient;
+use App\Support\EmailBroadcastMapper;
 use App\Support\FilterHandler;
 use App\Support\SchoolScope;
 use Illuminate\Http\Request;
@@ -115,6 +117,18 @@ class DataSiswaController extends Controller
                 "buttonText" => "Edit Status",
                 "buttonClass" => "btn btn-sm btn-warning button-set-status-siswa",
                 "buttonIcon" => "ri-edit-box-line me-2",
+            ],
+            [
+                "data" => "kirim_email",
+                "name" => "Kirim Email",
+                "dataVal" => true,
+                "columnType" => "button",
+                "className" => "text-center",
+                "button" => "action",
+                "buttonText" => "Antri Email",
+                "buttonClass" => "btn btn-sm btn-primary button-kirim-email",
+                "buttonIcon" => "ri-mail-send-line me-2",
+                "exportable" => false,
             ],
         ];
     }
@@ -261,6 +275,7 @@ class DataSiswaController extends Controller
                 $row["no_wa"] = $item->NO_WA;
                 $row["edit_siswa"] = true;
                 $row["set_status"] = true;
+                $row["kirim_email"] = true;
                 unset($row["CUSTID"]);
 
                 return $row;
@@ -552,6 +567,34 @@ class DataSiswaController extends Controller
                 ["message" => "Gagal memperbarui data siswa.", "error" => $e->getMessage()],
                 422,
             );
+        }
+    }
+
+    public function sendEmail(Request $request, $id, EmailBroadcasterClient $client)
+    {
+        $siswa = scctcust::when($this->unitScope, fn ($q) => $q->where("CODE01", $this->unitScope))
+            ->where("CUSTID", $id)
+            ->first();
+
+        if (!$siswa) {
+            return response()->json(["message" => "Siswa tidak ditemukan."], 422);
+        }
+
+        $payload = EmailBroadcastMapper::fromSiswa($siswa);
+        if (empty($payload['email']) || !filter_var($payload['email'], FILTER_VALIDATE_EMAIL)) {
+            return response()->json(["message" => "Siswa ini belum punya email yang valid."], 422);
+        }
+
+        try {
+            $result = $client->billing($payload);
+            $queued = (int) ($result['queued'] ?? 1);
+
+            return response()->json([
+                "message" => "Email tagihan {$siswa->NMCUST} masuk antrian ({$queued} PENDING).",
+                "data" => $result,
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json(["message" => $e->getMessage()], 422);
         }
     }
 }

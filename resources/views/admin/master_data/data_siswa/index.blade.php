@@ -817,6 +817,58 @@
                 }
             });
 
+            document.addEventListener('click', async function (e) {
+                const btn = e.target.closest('.button-kirim-email');
+                if (!btn) {
+                    return;
+                }
+
+                let row = {};
+                try {
+                    row = JSON.parse((btn.getAttribute('data-val') || '{}').replace(/&quot;/g, '"').replace(/&#39;/g, "'"));
+                } catch (error) {
+                    row = {};
+                }
+
+                const custId = row.item_id;
+                if (!custId) {
+                    warningAlert('Data siswa tidak lengkap.');
+                    return;
+                }
+
+                const confirm = await Swal.fire({
+                    title: 'Antri email tagihan?',
+                    text: (row.nmcust || row.nama || 'Siswa') + ' akan masuk queue Email Broadcaster (PENDING).',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, antrikan',
+                    cancelButtonText: 'Batal'
+                });
+                if (!confirm.isConfirmed) {
+                    return;
+                }
+
+                loadingAlert('Mengirim ke antrian email...');
+                try {
+                    const response = await fetch('{{ url('admin/master-data/data-siswa/send-email') }}/' + custId, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+                    const payload = await response.json();
+                    if (!response.ok) {
+                        errorAlert(payload.message || 'Gagal masuk antrian.');
+                        return;
+                    }
+                    successAlert(payload.message);
+                } catch (error) {
+                    errorAlert(error.message || 'Gagal masuk antrian.');
+                }
+            });
+
             document.getElementById('btn-reset-android-selected').addEventListener('click', async function () {
                 const ids = Array.from(selectedResetAndroidIds);
                 if (ids.length === 0) {
